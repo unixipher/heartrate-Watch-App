@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSHealthShareUsageDescription</key>
+    <string>We need access to your heart rate data to monitor and analyze your heart rate in real-time</string>
+
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>We need access to your heart rate data to monitor and analyze your heart rate in real-time</string>
+
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>processing</string>
+        <string>remote-notification</string>
+    </array>
+
+    <key>WKBackgroundModes</key>
+    <array>
+        <string>workout-processing</string>
+    </array>
+
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>healthkit</string>
+    </array>
+
+    <key>WKRunsIndependentlyOfCompanionApp</key>
+    <true/>
+</dict>
+</plist>
