@@ -8,15 +8,17 @@
 // ContentView.swift
 import SwiftUI
 import HealthKit
-import WatchKit  // Import WatchKit for WKInterfaceDevice
+import WatchKit
 
-class HeartRateManager: ObservableObject {
+class HeartRateManager: NSObject, ObservableObject {
     private let healthStore = HKHealthStore()
     @Published var currentHeartRate: Double = 0
     @Published var isMonitoring: Bool = false
     private var query: HKQuery?
+    private var session: WKExtendedRuntimeSession?
     
-    init() {
+    override init() {
+        super.init()
         requestAuthorization()
     }
     
@@ -34,8 +36,6 @@ class HeartRateManager: ObservableObject {
     func startMonitoring() {
         guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
         
-        
-        // Stop any existing query
         if let existingQuery = query {
             healthStore.stop(existingQuery)
         }
@@ -58,6 +58,8 @@ class HeartRateManager: ObservableObject {
         DispatchQueue.main.async {
             self.isMonitoring = true
         }
+        
+        startExtendedRuntimeSession()
     }
     
     func stopMonitoring() {
@@ -70,6 +72,8 @@ class HeartRateManager: ObservableObject {
             self.isMonitoring = false
             self.currentHeartRate = 0
         }
+        
+        stopExtendedRuntimeSession()
     }
     
     private func processHeartRateSamples(_ samples: [HKSample]?) {
@@ -105,6 +109,33 @@ class HeartRateManager: ObservableObject {
                 print("Heart rate sent. Status: \(httpResponse.statusCode)")
             }
         }.resume()
+    }
+    
+    private func startExtendedRuntimeSession() {
+        session = WKExtendedRuntimeSession()
+        session?.delegate = self
+        session?.start()
+    }
+    
+    private func stopExtendedRuntimeSession() {
+        session?.invalidate()
+        session = nil
+    }
+}
+
+extension HeartRateManager: WKExtendedRuntimeSessionDelegate {
+    func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        print("Extended runtime session started")
+    }
+    
+    func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        print("Extended runtime session will expire")
+        stopMonitoring()
+    }
+    
+    func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession, didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: Error?) {
+        print("Extended runtime session invalidated with reason: \(reason)")
+        stopMonitoring()
     }
 }
 
