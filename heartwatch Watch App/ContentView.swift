@@ -5,10 +5,10 @@
 //  Created by Devangi Agarwal on 11/01/25.
 //
 
-// ContentView.swift
 import SwiftUI
 import HealthKit
 import WatchKit
+import SocketIO
 
 class HeartRateManager: NSObject, ObservableObject {
     private let healthStore = HKHealthStore()
@@ -17,9 +17,57 @@ class HeartRateManager: NSObject, ObservableObject {
     private var query: HKQuery?
     private var session: WKExtendedRuntimeSession?
     
+    private var manager: SocketManager?
+    private var socket: SocketIOClient?
+    
     override init() {
         super.init()
         requestAuthorization()
+        setupSocket()
+    }
+    
+    private func setupSocket() {
+        let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQsImVtYWlsIjoiYXJrb0BnbWFpbC5jb20iLCJpYXQiOjE3NDE1MjU3MTd9.Ax3TFtUkpbAD8-JR9EIL0WKmbjMSXpVA3LnBNXbKxgY"
+        guard let url = URL(string: "https://heartrate-qv3x.onrender.com") else {
+            print("Invalid server URL")
+            return
+        }
+        
+        manager = SocketManager(
+            socketURL: url,
+            config: [
+                .log(true),        // Enable logs for debugging
+                .compress,         // Enable compression
+                .extraHeaders(["authorization": "Bearer \(token)"])
+            ]
+        )
+        
+        socket = manager?.defaultSocket
+        
+        // Socket event handlers
+        socket?.on(clientEvent: .connect) { [weak self] data, ack in
+            print("Connected to Socket.IO server")
+        }
+        
+        socket?.on(clientEvent: .error) { [weak self] data, ack in
+            print("Socket error: \(data)")
+        }
+        
+        socket?.on(clientEvent: .disconnect) { [weak self] data, ack in
+            print("Disconnected from Socket.IO server")
+        }
+        
+        socket?.on("watchdataSaved") { [weak self] data, ack in
+            if let data = data.first as? [String: Any] {
+                print("Watch data saved: \(data)")
+            }
+        }
+        
+        socket?.on("error") { [weak self] data, ack in
+            if let message = data.first as? String {
+                print("Server error: \(message)")
+            }
+        }
     }
     
     func requestAuthorization() {
@@ -60,6 +108,7 @@ class HeartRateManager: NSObject, ObservableObject {
         }
         
         startExtendedRuntimeSession()
+        socket?.connect() // Connect socket when monitoring starts
     }
     
     func stopMonitoring() {
@@ -74,6 +123,7 @@ class HeartRateManager: NSObject, ObservableObject {
         }
         
         stopExtendedRuntimeSession()
+        socket?.disconnect() // Disconnect socket when monitoring stops
     }
     
     private func processHeartRateSamples(_ samples: [HKSample]?) {
@@ -89,26 +139,8 @@ class HeartRateManager: NSObject, ObservableObject {
     }
     
     private func sendHeartRateToServer(heartRate: Double) {
-        guard let url = URL(string: "https://server-toza.onrender.com/api/watch-data") else { return }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let payload = ["heartRate": heartRate]
-        
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: payload) else { return }
-        request.httpBody = jsonData
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Error sending heart rate: \(error)")
-                return
-            }
-            if let httpResponse = response as? HTTPURLResponse {
-                print("Heart rate sent. Status: \(httpResponse.statusCode)")
-            }
-        }.resume()
+        let data: [String: Any] = ["heartRate": heartRate]
+        socket?.emit("watchdata", data) // Emit heart rate data via Socket.IO
     }
     
     private func startExtendedRuntimeSession() {
